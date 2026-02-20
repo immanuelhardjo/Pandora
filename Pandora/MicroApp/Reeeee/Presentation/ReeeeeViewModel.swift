@@ -12,6 +12,26 @@ import Observation
 import AVFoundation
 import SwiftData
 
+// MARK: - Motion Service Protocol
+
+/// Protocol abstracting accelerometer access for testability
+/// Wraps CMMotionManager so tests can inject a mock
+protocol MotionServiceProtocol: AnyObject {
+    var isAccelerometerAvailable: Bool { get }
+    var accelerometerUpdateInterval: TimeInterval { get set }
+    
+    func startAccelerometerUpdates(
+        to queue: OperationQueue,
+        withHandler handler: @escaping (CMAccelerometerData?, Error?) -> Void
+    )
+    func stopAccelerometerUpdates()
+}
+
+// MARK: - CMMotionManager Conformance
+
+/// CMMotionManager already satisfies the protocol — no wrapper needed
+extension CMMotionManager: MotionServiceProtocol {}
+
 // MARK: - ViewModel Protocol
 
 /// Protocol defining ReeeeeViewModel interface for testability
@@ -36,8 +56,8 @@ final class ReeeeeViewModel: ReeeeeViewModelProtocol {
     
     // MARK: - Dependencies
     
-    private let repository: SwiftDataRepository<ReeeeeModel>
-    private let motionManager: CMMotionManager
+    private let repository: AnyRepository<ReeeeeModel>
+    private let motionManager: MotionServiceProtocol
     private let audioService: AudioServiceProtocol
     
     // MARK: - State
@@ -68,8 +88,8 @@ final class ReeeeeViewModel: ReeeeeViewModelProtocol {
     // MARK: - Initialization
     
     init(
-        repository: SwiftDataRepository<ReeeeeModel>,
-        motionManager: CMMotionManager = CMMotionManager(),
+        repository: AnyRepository<ReeeeeModel>,
+        motionManager: MotionServiceProtocol = CMMotionManager(),
         audioService: AudioServiceProtocol = AudioService()
     ) {
         self.repository = repository
@@ -279,7 +299,7 @@ enum ReeeeeViewModelFactory {
     
     @MainActor
     static func makeViewModel(
-        repository: SwiftDataRepository<ReeeeeModel>
+        repository: AnyRepository<ReeeeeModel>
     ) -> ReeeeeViewModel {
         ReeeeeViewModel(
             repository: repository,
@@ -291,8 +311,8 @@ enum ReeeeeViewModelFactory {
     /// Create ViewModel with custom dependencies (useful for testing)
     @MainActor
     static func makeViewModel(
-        repository: SwiftDataRepository<ReeeeeModel>,
-        motionManager: CMMotionManager,
+        repository: AnyRepository<ReeeeeModel>,
+        motionManager: MotionServiceProtocol,
         audioService: AudioServiceProtocol
     ) -> ReeeeeViewModel {
         ReeeeeViewModel(

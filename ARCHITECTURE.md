@@ -2,7 +2,7 @@
 
 ## Overview
 
-Pandora is a **MicroApp Container** built with **Clean Architecture** principles, following industry-standard design patterns for maintainability, testability, and scalability.
+Pandora is a **MicroApp Container** built with **Clean Architecture** principles, following industry-standard design patterns for maintainability, testability, and scalability. Persistence is powered by **SwiftData**, and all cross-module boundaries are enforced through **protocol abstractions**.
 
 ---
 
@@ -23,27 +23,29 @@ Pandora is a **MicroApp Container** built with **Clean Architecture** principles
 - **Pattern**: Use Case / Interactor pattern
 - **Components**:
   - **Use Cases**: Single-responsibility business operations
-  - **Domain Models**: Core entities (e.g., ReeeeeModel)
+  - **Domain Models**: Core entities (e.g., ReeeeeModel as SwiftData `@Model`)
   - **Protocols**: Defining contracts within the MicroApp
 - **Note**: Each MicroApp owns its business logic for true modularity
 
 ### 3. **Data Layer** (Persistence)
-- **Location**: `Core/Repository/` (protocols) + `MicroApp/{FeatureName}/Data/` (implementations)
-- **Responsibility**: Data access and persistence
-- **Pattern**: Repository pattern
+- **Location**: `Core/Repository/` (protocol + generic impl) + `MicroApp/{FeatureName}/Data/` (factories)
+- **Responsibility**: Data access and persistence via SwiftData
+- **Pattern**: Repository pattern with Type Erasure
 - **Components**:
-  - **Core Protocols**: Generic Repository protocol in Core
-  - **Generic Implementations**: UserDefaultsRepository<T> in Core (reusable)
-  - **MicroApp Repositories**: Feature-specific repository factories in each MicroApp
+  - **Core Protocol**: Generic `Repository` protocol requiring `PersistentModel`
+  - **Generic Implementation**: `SwiftDataRepository<T>` backed by `ModelContext`
+  - **Type-Erased Wrapper**: `AnyRepository<T>` for crossing abstraction boundaries
+  - **MicroApp Factories**: Feature-specific repository factories (e.g., `ReeeeeRepositoryFactory`)
 
 ### 4. **Infrastructure Layer** (Core Services)
 - **Location**: `Core/`
-- **Responsibility**: Cross-cutting concerns
+- **Responsibility**: Cross-cutting concerns shared across all modules
 - **Components**:
   - **Navigation**: Router (Coordinator pattern)
-  - **DI Container**: Dependency injection
-  - **Protocols**: MicroAppProvider interfaces
-  - **Theme**: Design system and styling
+  - **DI Container**: Dependency injection via Service Locator + `@Injected` wrapper
+  - **Registry**: `MicroAppRegistry` for decoupled MicroApp discovery
+  - **Protocols**: `MicroAppProvider`, `UseCase`, `Repository` interfaces
+  - **Theme**: Design system and styling constants
 
 ---
 
@@ -52,17 +54,18 @@ Pandora is a **MicroApp Container** built with **Clean Architecture** principles
 ### 1. **MVVM (Model-View-ViewModel)**
 - **Where**: All Views and ViewModels
 - **Why**: Separation of UI logic from business logic
-- **Example**: `HubView` + `HubViewModel`
+- **Example**: `HubView` + `HubViewModel`, `ReeeeeView` + `ReeeeeViewModel`
 
 ### 2. **Repository Pattern**
-- **Where**: `Core/Repository/`
-- **Why**: Abstract data persistence layer for testability
-- **Example**: `UserDefaultsRepository<T>`
+- **Where**: `Core/Repository/`, `MicroApp/*/Data/`
+- **Why**: Abstract data persistence for testability and swappability
+- **Implementation**: `Repository` protocol → `SwiftDataRepository<T>` → `AnyRepository<T>`
+- **Key**: ViewModel and UseCases depend on `AnyRepository<T>`, never on the concrete class
 
 ### 3. **Use Case / Interactor Pattern**
-- **Where**: `Core/UseCase/`
+- **Where**: `MicroApp/*/Domain/UseCase/`
 - **Why**: Encapsulate single business operations
-- **Example**: `SaveReeeeeRecordUseCase`
+- **Example**: `SaveReeeeeRecordUseCase`, `DetectFreefallUseCase`
 
 ### 4. **Dependency Injection (DI)**
 - **Where**: `Core/DependencyInjection/`
@@ -74,29 +77,39 @@ Pandora is a **MicroApp Container** built with **Clean Architecture** principles
 - **Where**: `Core/Navigation/Router.swift`
 - **Why**: Centralized navigation logic
 - **Features**: 
-  - Type-safe routing
-  - Deep link support
+  - Type-safe routing via `AppRoute` enum
+  - Deep link support (`pandora://microapp/{id}`)
   - Navigation history tracking
 
 ### 6. **Factory Pattern**
-- **Where**: Throughout (Factories for ViewModels, Repositories, etc.)
-- **Why**: Centralized object creation
-- **Example**: `RouterFactory`, `HubViewModelFactory`
+- **Where**: Throughout (Factories for ViewModels, Repositories, Router, etc.)
+- **Why**: Centralized object creation with proper dependency wiring
+- **Examples**: `RouterFactory`, `HubViewModelFactory`, `ReeeeeViewModelFactory`, `ReeeeeRepositoryFactory`
 
 ### 7. **Strategy Pattern**
 - **Where**: `MicroAppProvider` protocol
-- **Why**: Pluggable MicroApp implementations
-- **Example**: Different MicroApps implement the same protocol
+- **Why**: Pluggable MicroApp implementations with identical interface
+- **Example**: Different MicroApps implement `MicroAppProvider` and are discovered at runtime
 
 ### 8. **Type Erasure**
-- **Where**: `AnyMicroApp` wrapper
-- **Why**: Store heterogeneous MicroApps in collections
-- **Pattern**: Type-erased wrapper around protocol with associated type
+- **Where**: `AnyMicroApp`, `AnyRepository<T>`
+- **Why**: Store heterogeneous types in homogeneous collections; cross abstraction boundaries
+- **Example**: `AnyMicroApp` wraps any `MicroAppProvider` with associated types
 
-### 9. **Protocol-Oriented Design**
-- **Where**: Throughout the codebase
+### 9. **Registry Pattern**
+- **Where**: `Core/Registry/MicroAppRegistry.swift`
+- **Why**: Decouple MicroApp discovery from the Hub module
+- **Flow**: `PandoraApp` registers concrete MicroApps → `HubViewModel` reads via `MicroAppRegistryProtocol`
+
+### 10. **Protocol-Oriented Design**
+- **Where**: Throughout the entire codebase
 - **Why**: Flexibility, testability, abstraction
-- **Examples**: `RouterProtocol`, `HubViewModelProtocol`, `Repository`
+- **Examples**: `RouterProtocol`, `HubViewModelProtocol`, `Repository`, `MotionServiceProtocol`, `AudioServiceProtocol`, `MicroAppRegistryProtocol`
+
+### 11. **Composition Root**
+- **Where**: `PandoraApp.swift`
+- **Why**: Single place that knows about all concrete types
+- **What it does**: Registers MicroApps, creates ModelContainer, wires core dependencies
 
 ---
 
@@ -105,7 +118,7 @@ Pandora is a **MicroApp Container** built with **Clean Architecture** principles
 ```
 Pandora/
 ├── App/
-│   └── PandoraApp.swift              # Entry point with DI setup
+│   └── PandoraApp.swift              # Composition root: registration, ModelContainer, DI
 │
 ├── Core/                              # Infrastructure & Core Services (SHARED ONLY)
 │   ├── DependencyInjection/
@@ -113,40 +126,39 @@ Pandora/
 │   ├── Navigation/
 │   │   └── Router.swift              # Coordinator pattern navigation
 │   ├── Protocol/
-│   │   ├── MicroAppProvider.swift    # MicroApp interface & type erasure
-│   │   └── UseCase.swift             # Generic UseCase protocol
+│   │   ├── MicroAppProvider.swift    # MicroApp interface, metadata, AnyMicroApp
+│   │   └── UseCase.swift             # Generic UseCase protocols
+│   ├── Registry/
+│   │   └── MicroAppRegistry.swift    # Decoupled MicroApp discovery registry
 │   ├── Repository/
-│   │   └── Repository.swift          # Generic repository protocol & base implementation
+│   │   └── Repository.swift          # Repository protocol, SwiftDataRepository<T>, AnyRepository<T>
 │   └── Theme/
 │       └── PandoraTheme.swift        # Design system constants
 │
 ├── MicroApp/                          # Feature Modules (SELF-CONTAINED)
-│   ├── Hub/                           # Hub MicroApp
+│   ├── Hub/                           # Hub MicroApp (launcher)
 │   │   ├── Presentation/
-│   │   │   ├── HubCard.swift
 │   │   │   ├── HubView.swift
-│   │   │   └── HubViewModel.swift
+│   │   │   ├── HubViewModel.swift
+│   │   │   └── Components/
+│   │   │       └── HubCard.swift
 │   │   └── HubMicroApp.swift
 │   │
-│   └── Reeeee/                        # Reeeee (Yeet) MicroApp - FULLY MODULAR
+│   └── Reeeee/                        # Reeeee (Yeet) MicroApp — FULLY MODULAR
 │       ├── Domain/                    # Business Logic Layer
 │       │   ├── Model/
-│       │   │   └── ReeeeeModel.swift
+│       │   │   └── ReeeeeModel.swift  # @Model class (SwiftData)
 │       │   └── UseCase/
-│       │       ├── DetectFreefallUseCase.swift
-│       │       ├── DetectImpactUseCase.swift
-│       │       ├── SaveReeeeeRecordUseCase.swift
-│       │       ├── FetchReeeeeHistoryUseCase.swift
-│       │       └── CalculatePhysicsMetricsUseCase.swift
+│       │       └── ReeeeeUseCases.swift
 │       ├── Data/                      # Data Layer
-│       │   └── ReeeeeRepository.swift
+│       │   └── ReeeeeRepository.swift # Factory → AnyRepository<ReeeeeModel>
 │       ├── Presentation/              # Presentation Layer
 │       │   ├── ReeeeeView.swift
-│       │   └── ReeeeeViewModel.swift
-│       └── ReeeeeMicroApp.swift       # Entry point & registration
+│       │   └── ReeeeeViewModel.swift  # + MotionServiceProtocol, AudioServiceProtocol
+│       └── ReeeeeMicroApp.swift       # Entry point + ReeeeeContainerView
 │
-├── Shared/                            # Shared Resources
-│   └── Components/                    # Reusable UI components
+├── Shared/                            # Shared UI Resources
+│   └── Components/
 │       ├── PandoraButton.swift
 │       ├── PandoraCard.swift
 │       └── ViewModifiers.swift
@@ -159,34 +171,85 @@ Pandora/
 
 ## 🔄 Data Flow
 
-### Example: Loading Reeeee History (Within Reeeee MicroApp)
+### Persistence: SwiftData Pipeline
 
 ```
-Reeeee MicroApp Module:
-├─ View (ReeeeeView)
-│   ↓
-├─ ViewModel (ReeeeeViewModel)
-│   ↓
-├─ Use Case (FetchReeeeeHistoryUseCase)    ← Business logic
-│   ↓
-├─ Repository (ReeeeeRepository)            ← Data access
-│   ↓
-└─ Data Source (UserDefaults)               ← Persistence
-
-All contained within MicroApp/Reeeee/ module!
-```
-
-### Example: Navigation
-
-```
-View (HubView)
+PandoraApp (creates ModelContainer from MicroApp-declared schemas)
+    ↓  .modelContainer(modelContainer)
+SwiftUI Environment (injects ModelContext)
+    ↓  @Environment(\.modelContext)
+ReeeeeContainerView (bridges environment → ViewModel)
+    ↓  ReeeeeRepositoryFactory.makeRepository(modelContext:)
+AnyRepository<ReeeeeModel> (type-erased abstraction)
+    ↓  injected into ViewModel
+ReeeeeViewModel (calls repository.save / fetchAll / deleteAll)
     ↓
+SwiftDataRepository<ReeeeeModel> (concrete, talks to ModelContext)
+    ↓
+SQLite (managed by SwiftData)
+```
+
+### MicroApp Discovery
+
+```
+PandoraApp.registerMicroApps()          ← composition root
+    ↓  MicroAppRegistry.shared.register(ReeeeeMicroApp())
+MicroAppRegistry (shared singleton)
+    ↓  conforms to MicroAppRegistryProtocol
+HubViewModel(registry:)                 ← injected via protocol
+    ↓  reads registry.registeredApps
+HubView                                 ← displays cards
+    ↓  user taps a card
 Router.navigateToMicroApp(id)
     ↓
-SwiftUI NavigationStack
+NavigationStack → destinationView(for:)
     ↓
-Destination View (ReeeeeView)
+MicroApp.makeView()                     ← renders feature
 ```
+
+### Example: Loading Reeeee History
+
+```
+ReeeeeView
+    ↓  @State viewModel
+ReeeeeViewModel.loadHistory()
+    ↓  repository.fetchAll()
+AnyRepository<ReeeeeModel>
+    ↓  delegates to SwiftDataRepository
+ModelContext.fetch(FetchDescriptor<ReeeeeModel>)
+    ↓  returns [ReeeeeModel]
+ViewModel.history = records
+    ↓  @Observable triggers UI update
+ReeeeeView re-renders history list
+```
+
+---
+
+## 🔀 Dependency Direction
+
+All dependencies point **inward** — outer layers depend on inner layers, never the reverse.
+
+```
+┌──────────────────────────────────────────────┐
+│  Presentation (Views, ViewModels)            │
+│    ↓ depends on                              │
+│  ┌────────────────────────────────────────┐  │
+│  │  Domain (UseCases, Models)             │  │
+│  │    ↓ depends on                        │  │
+│  │  ┌──────────────────────────────────┐  │  │
+│  │  │  Core (Protocols, Abstractions)  │  │  │
+│  │  └──────────────────────────────────┘  │  │
+│  └────────────────────────────────────────┘  │
+└──────────────────────────────────────────────┘
+```
+
+**Key boundary rules:**
+- ViewModel → `AnyRepository<T>` (never `SwiftDataRepository`)
+- ViewModel → `MotionServiceProtocol` (never `CMMotionManager`)
+- ViewModel → `AudioServiceProtocol` (never `AudioService`)
+- HubViewModel → `MicroAppRegistryProtocol` (never `MicroAppRegistry`)
+- UseCases → `AnyRepository<T>` (never concrete)
+- Only `Data/` factories and `PandoraApp` touch concrete types
 
 ---
 
@@ -194,35 +257,54 @@ Destination View (ReeeeeView)
 
 ### Unit Testing Strategy
 
-1. **ViewModels**: Test business logic without UI
-   - Mock repositories via protocols
-   - Test state changes and data transformations
+Every dependency in the Reeeee module is injectable via protocol:
 
-2. **Use Cases**: Test in isolation
-   - Mock dependencies (repositories, services)
-   - Verify business rules
-
-3. **Repositories**: Test data operations
-   - Mock UserDefaults
-   - Verify encoding/decoding
-
-4. **Router**: Test navigation logic
-   - Verify path changes
-   - Test deep link handling
+| Dependency | Protocol | Concrete | Mock Example |
+|---|---|---|---|
+| Persistence | `AnyRepository<ReeeeeModel>` | `SwiftDataRepository` | In-memory array |
+| Motion | `MotionServiceProtocol` | `CMMotionManager` | Simulated freefall |
+| Audio | `AudioServiceProtocol` | `AudioService` | No-op player |
+| Registry | `MicroAppRegistryProtocol` | `MicroAppRegistry` | Pre-loaded list |
 
 ### Mocking Example
 
 ```swift
-// Mock repository for testing
-class MockReeeeeRepository: Repository {
-    var mockData: [ReeeeeModel] = []
+// Mock repository backed by an in-memory array
+@MainActor
+class MockReeeeeRepository {
+    var records: [ReeeeeModel] = []
     
-    func fetchAll() async throws -> [ReeeeeModel] {
-        return mockData
+    func save(_ entity: ReeeeeModel) throws { records.append(entity) }
+    func fetchAll() throws -> [ReeeeeModel] { records }
+    func deleteAll() throws { records.removeAll() }
+}
+
+// Mock motion service for simulating throws
+class MockMotionService: MotionServiceProtocol {
+    var isAccelerometerAvailable = true
+    var accelerometerUpdateInterval: TimeInterval = 0.01
+    
+    private var handler: ((CMAccelerometerData?, Error?) -> Void)?
+    
+    func startAccelerometerUpdates(to queue: OperationQueue,
+                                   withHandler handler: @escaping (CMAccelerometerData?, Error?) -> Void) {
+        self.handler = handler
     }
     
-    // ... other methods
+    func stopAccelerometerUpdates() { handler = nil }
+    
+    // Test helper: simulate freefall / impact
+    func simulateAcceleration(_ data: CMAccelerometerData) {
+        handler?(data, nil)
+    }
 }
+
+// Usage in tests:
+let vm = ReeeeeViewModel(
+    repository: AnyRepository(mockRepo),
+    motionManager: MockMotionService(),
+    audioService: MockAudioService()
+)
 ```
 
 ---
@@ -231,48 +313,68 @@ class MockReeeeeRepository: Repository {
 
 ### Single Responsibility
 - Each class has one reason to change
-- Example: `Router` only handles navigation
+- `Router` → navigation only, `SwiftDataRepository` → persistence only, `ReeeeeViewModel` → Reeeee state only
 
 ### Open/Closed
 - Open for extension, closed for modification
-- Example: New MicroApps extend `MicroAppProvider` without changing core
+- New MicroApps extend `MicroAppProvider` and register in `PandoraApp` — no existing code changes
 
 ### Liskov Substitution
-- Subtypes can replace base types
-- Example: Any `Repository` implementation works the same
+- Any `MotionServiceProtocol` implementation works in the ViewModel
+- Any `AnyRepository<ReeeeeModel>` works regardless of backing store
 
 ### Interface Segregation
-- Clients depend only on methods they use
-- Example: Specific use case protocols
+- `MotionServiceProtocol` exposes only what the ViewModel needs (4 members), not the full `CMMotionManager` API
+- `MicroAppRegistryProtocol` exposes only `registeredApps`, not mutation methods
 
 ### Dependency Inversion
-- Depend on abstractions, not concretions
-- Example: ViewModels depend on `Repository` protocol, not UserDefaults
+- ViewModel depends on `AnyRepository<T>`, `MotionServiceProtocol`, `AudioServiceProtocol`
+- Never on `SwiftDataRepository`, `CMMotionManager`, or `AudioService`
 
 ---
 
 ## 🚀 Adding a New MicroApp
 
-### Modular Structure (Recommended)
+### Step-by-Step
 
-Create a self-contained module:
+#### 1. Create the module structure:
 
 ```
 MicroApp/NewFeature/
 ├── Domain/
 │   ├── Model/
-│   │   └── NewFeatureModel.swift
+│   │   └── NewFeatureModel.swift      ← @Model class
 │   └── UseCase/
 │       └── NewFeatureUseCases.swift
 ├── Data/
-│   └── NewFeatureRepository.swift
+│   └── NewFeatureRepository.swift     ← Factory → AnyRepository<NewFeatureModel>
 ├── Presentation/
 │   ├── NewFeatureView.swift
 │   └── NewFeatureViewModel.swift
-└── NewFeatureMicroApp.swift
+└── NewFeatureMicroApp.swift           ← MicroAppProvider conformance
 ```
 
-1. **Create the MicroApp Entry Point**:
+#### 2. Define your SwiftData model:
+
+```swift
+import SwiftData
+
+@Model
+final class NewFeatureModel {
+    @Attribute(.unique) var id: UUID
+    var name: String
+    var createdAt: Date
+    
+    init(id: UUID = UUID(), name: String, createdAt: Date = Date()) {
+        self.id = id
+        self.name = name
+        self.createdAt = createdAt
+    }
+}
+```
+
+#### 3. Create the MicroApp entry point:
+
 ```swift
 struct NewFeatureMicroApp: MicroAppProvider {
     let metadata = MicroAppMetadata(
@@ -282,42 +384,51 @@ struct NewFeatureMicroApp: MicroAppProvider {
         tintColor: .blue
     )
     
+    // Declare your SwiftData models here
+    var modelTypes: [any PersistentModel.Type] {
+        [NewFeatureModel.self]
+    }
+    
     func makeView() -> some View {
-        NewFeatureView()
+        NewFeatureContainerView()
     }
 }
 ```
 
-2. **Register in HubViewModel**:
+#### 4. Register in `PandoraApp.swift` (one line):
+
 ```swift
-private func registerDefaultMicroApps() {
-    let newApp = AnyMicroApp(NewFeatureMicroApp())
-    registerMicroApp(newApp)
+private static func registerMicroApps() {
+    let registry = MicroAppRegistry.shared
+    registry.register(ReeeeeMicroApp())
+    registry.register(NewFeatureMicroApp())  // ← add this
 }
 ```
 
-3. **Benefits of This Structure**:
-   - ✅ **True Modularity**: Each MicroApp is independent
-   - ✅ **Easy to Test**: Test the entire feature in isolation
-   - ✅ **Easy to Remove**: Delete the folder, done!
-   - ✅ **Team Scalability**: Different teams can own different MicroApps
-   - ✅ **Reusable Core**: Core module stays generic and clean
+**That's it.** The ModelContainer schema, Hub discovery, and navigation all wire up automatically.
+
+#### 5. Benefits:
+- ✅ **Zero changes** to Hub, Router, or any other MicroApp
+- ✅ **SwiftData schema** auto-collected via `modelTypes`
+- ✅ **Discovery** auto-collected via `MicroAppRegistry`
+- ✅ **Delete the folder** to remove the feature entirely
 
 ---
 
 ## 🔐 Best Practices
 
-### 1. Always use protocols for dependencies
+### 1. Always use protocol abstractions at boundaries
 ```swift
-// ✅ Good
-protocol RouterProtocol { ... }
+// ✅ Good — depends on abstraction
 class ViewModel {
-    let router: RouterProtocol
+    let repository: AnyRepository<MyModel>
+    let motionService: MotionServiceProtocol
 }
 
-// ❌ Bad
+// ❌ Bad — depends on concrete
 class ViewModel {
-    let router = Router()
+    let repository: SwiftDataRepository<MyModel>
+    let motionManager: CMMotionManager
 }
 ```
 
@@ -325,40 +436,42 @@ class ViewModel {
 ```swift
 // ✅ Good
 let router = RouterFactory.makeRouter()
+let repo = ReeeeeRepositoryFactory.makeRepository(modelContext: context)
 
 // ❌ Bad
 let router = Router()
+let repo = SwiftDataRepository<ReeeeeModel>(modelContext: context)
 ```
 
-### 3. Keep ViewModels testable
+### 3. Register MicroApps only in the composition root
 ```swift
-// ✅ Good - Dependencies injected
-class ViewModel {
-    init(repository: Repository) { ... }
+// ✅ Good — PandoraApp.swift (composition root)
+private static func registerMicroApps() {
+    MicroAppRegistry.shared.register(ReeeeeMicroApp())
 }
 
-// ❌ Bad - Hard dependency
-class ViewModel {
-    let repository = UserDefaultsRepository()
+// ❌ Bad — HubViewModel directly instantiates MicroApps
+private func registerDefaultMicroApps() {
+    microApps.append(AnyMicroApp(ReeeeeMicroApp()))
 }
 ```
 
-### 4. Use async/await for async operations
+### 4. Let MicroApps declare their own schemas
 ```swift
-// ✅ Good
-func loadData() async throws {
-    let data = try await repository.fetchAll()
-}
+// ✅ Good — MicroApp declares its models
+var modelTypes: [any PersistentModel.Type] { [ReeeeeModel.self] }
+
+// ❌ Bad — PandoraApp hardcodes all schemas
+let schema = Schema([ReeeeeModel.self, FooModel.self, BarModel.self])
 ```
 
 ### 5. Handle errors gracefully
 ```swift
 // ✅ Good
 do {
-    try await useCase.execute(request)
+    try repository.save(record)
 } catch {
-    // Show error to user
-    self.error = error
+    print("⚠️ Failed to save: \(error)")
 }
 ```
 
@@ -366,53 +479,38 @@ do {
 
 ## 📚 Key Technologies
 
-- **SwiftUI**: Declarative UI framework
-- **Observation Framework**: Modern state management (@Observable)
-- **Async/Await**: Modern concurrency
-- **NavigationStack**: Type-safe navigation
-- **CoreMotion**: Sensor data access
-- **UserDefaults**: Local persistence
-
----
-
-## 🔮 Future Enhancements
-
-1. **Networking Layer**: Add API services with Repository pattern
-2. **Core Data**: Enhanced local persistence
-3. **Combine**: Reactive programming for complex flows
-4. **Unit Tests**: Comprehensive test coverage
-5. **CI/CD**: Automated testing and deployment
-6. **Localization**: Multi-language support
-7. **Analytics**: Event tracking and monitoring
+| Technology | Purpose |
+|---|---|
+| **SwiftUI** | Declarative UI framework |
+| **SwiftData** | Persistence via `@Model`, `ModelContainer`, `ModelContext` |
+| **Observation** | Modern state management (`@Observable` macro) |
+| **Async/Await** | Modern concurrency for UseCases |
+| **NavigationStack** | Type-safe navigation with `NavigationPath` |
+| **CoreMotion** | Accelerometer data (behind `MotionServiceProtocol`) |
+| **AVFoundation** | Audio playback (behind `AudioServiceProtocol`) |
 
 ---
 
 ## 📝 Notes
 
-- This architecture is **scalable**: Easy to add new features
-- This architecture is **testable**: Mock dependencies easily
-- This architecture is **maintainable**: Clear separation of concerns
-- This architecture follows **industry standards**: SOLID, Clean Architecture, etc.
+- This architecture is **scalable**: Add MicroApps with one registration line
+- This architecture is **testable**: Every dependency is injectable via protocol
+- This architecture is **maintainable**: Clear separation of concerns, no cross-module coupling
+- This architecture is **decoupled**: Hub doesn't know about Reeeee; Reeeee doesn't know about Hub
+- This architecture follows **industry standards**: SOLID, Clean Architecture, Repository Pattern
 
-### ⚠️ Key Architectural Decision: Modular MicroApps
+### ⚠️ Key Architectural Decisions
 
-**Each MicroApp is self-contained** with its own Domain, Data, and Presentation layers:
+**1. MicroApps are self-contained** — each owns Domain, Data, and Presentation layers.
 
-**Why?**
-- **True Modularity**: Features can be developed, tested, and shipped independently
-- **Team Scalability**: Different teams can own different MicroApps without conflicts
-- **Easy Removal**: Delete a folder, and the MicroApp is gone
-- **Clear Boundaries**: Business logic stays within its feature context
-- **Reusable Core**: Core module only contains truly shared infrastructure
+**2. PandoraApp is the composition root** — the only file that knows about all concrete types. Adding a new MicroApp requires editing only this file.
 
-**What goes in Core vs MicroApp?**
-- ✅ **Core**: Generic protocols, DI container, Router, Theme, base Repository implementation
-- ✅ **MicroApp**: Feature-specific use cases, repositories, models, views, viewmodels
+**3. SwiftData schemas are collected dynamically** — each MicroApp declares `modelTypes`, and `PandoraApp` builds the `ModelContainer` by aggregating them through the registry.
 
-**Example**: `ReeeeeUseCases` lives in `MicroApp/Reeeee/Domain/UseCase/` because it's specific to the Reeeee feature, not shared infrastructure.
+**4. Concrete types are hidden behind abstractions** — `AnyRepository<T>` hides `SwiftDataRepository`, `MotionServiceProtocol` hides `CMMotionManager`, `MicroAppRegistryProtocol` hides `MicroAppRegistry`.
 
 ---
 
-**Last Updated**: February 17, 2026
-**Author**: Enhanced by GitHub Copilot
-**Version**: 2.0.0
+**Last Updated**: February 21, 2026  
+**Author**: Enhanced by GitHub Copilot  
+**Version**: 3.0.0

@@ -30,20 +30,30 @@ struct PandoraApp: App {
     // MARK: - Initialization
     
     init() {
-        // Initialize dependencies first
-        self.router = RouterFactory.makeRouter()
-        self.hubViewModel = HubViewModelFactory.makeViewModel()
+        // 1. Register all MicroApps with the shared registry
+        //    This is the ONLY place that knows about concrete MicroApp types.
+        //    Adding a new MicroApp = one line here.
+        Self.registerMicroApps()
         
-        // Configure SwiftData ModelContainer
+        // 2. Initialize dependencies (reads from registry automatically)
+        let router = RouterFactory.makeRouter()
+        let hubViewModel = HubViewModelFactory.makeViewModel()
+        
+        self.router = router
+        self.hubViewModel = hubViewModel
+        
+        // 3. Build SwiftData schema dynamically from registered MicroApps
+        let allModelTypes = hubViewModel.allModelTypes
+        
         do {
-            let schema = Schema([ReeeeeModel.self])
+            let schema = Schema(allModelTypes)
             let configuration = ModelConfiguration(isStoredInMemoryOnly: false)
             self.modelContainer = try ModelContainer(for: schema, configurations: [configuration])
         } catch {
             fatalError("❌ Failed to create ModelContainer: \(error)")
         }
         
-        // Setup core dependencies
+        // 4. Setup core dependencies
         Self.setupCoreDependencies()
     }
     
@@ -97,14 +107,26 @@ struct PandoraApp: App {
         }
     }
     
+    // MARK: - MicroApp Registration
+    
+    /// Register all MicroApps with the shared registry
+    /// This is the **composition root** — the single place that knows about
+    /// concrete MicroApp types. Adding a new MicroApp = one line here.
+    @MainActor
+    private static func registerMicroApps() {
+        let registry = MicroAppRegistry.shared
+        
+        registry.register(ReeeeeMicroApp())
+        
+        // Add new MicroApps here:
+        // registry.register(NewFeatureMicroApp())
+    }
+    
     // MARK: - Dependency Injection Setup
     
     /// Configure core dependencies only
-    /// MicroApps are responsible for registering their own dependencies
-    /// in their respective entry points (e.g., ReeeeeMicroApp.swift)
+    /// MicroApps register their own dependencies on-demand
     private static func setupCoreDependencies() {
-        let container = DIContainer.shared
-        
         // Register only shared/core services here
         // Examples:
         // - Analytics service
@@ -113,7 +135,6 @@ struct PandoraApp: App {
         // - Theme manager
         
         print("✅ Core dependencies configured")
-        print("ℹ️  MicroApps will register their own dependencies on-demand")
     }
     
     // MARK: - Deep Link Handling

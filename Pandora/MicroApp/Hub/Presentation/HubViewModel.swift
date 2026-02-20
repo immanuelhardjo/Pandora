@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 // MARK: - Hub ViewModel Protocol
 
@@ -23,15 +24,23 @@ protocol HubViewModelProtocol: AnyObject {
 
 // MARK: - Hub ViewModel
 
-/// ViewModel managing the Hub's state and MicroApp registry
+/// ViewModel managing the Hub's state and MicroApp discovery
 /// Follows MVVM pattern with protocol-oriented design
 ///
 /// **Responsibilities**:
-/// - Maintain registry of all installed MicroApps
+/// - Read registered MicroApps from the shared registry
 /// - Provide search/filter functionality
 /// - Handle dynamic app registration/unregistration
+///
+/// **Decoupling**: HubViewModel does NOT import or instantiate any
+/// concrete MicroApp. It reads from `MicroAppRegistry`, which is
+/// populated by `PandoraApp` at launch.
 @Observable
 final class HubViewModel: HubViewModelProtocol {
+    
+    // MARK: - Dependencies
+    
+    private let registry: MicroAppRegistryProtocol
     
     // MARK: - Properties
     
@@ -50,8 +59,11 @@ final class HubViewModel: HubViewModelProtocol {
     
     // MARK: - Initialization
     
-    init() {
-        registerDefaultMicroApps()
+    /// Initialize with a registry (defaults to the shared singleton)
+    /// - Parameter registry: The MicroApp registry to read apps from
+    init(registry: MicroAppRegistryProtocol = MicroAppRegistry.shared) {
+        self.registry = registry
+        self.microApps = registry.registeredApps
         updateFilteredApps()
     }
     
@@ -97,22 +109,13 @@ final class HubViewModel: HubViewModelProtocol {
         microApps.count
     }
     
-    // MARK: - Private Methods
-    
-    /// Register all default MicroApps on initialization
-    /// This is where you manually "unlock" new apps in the box
-    private func registerDefaultMicroApps() {
-        // Register Reeeee MicroApp
-        let reeeeeApp = AnyMicroApp(ReeeeeMicroApp())
-        microApps.append(reeeeeApp)
-        
-        // Add more apps here as you build them
-        // Example:
-        // let newApp = AnyMicroApp(NewMicroApp())
-        // microApps.append(newApp)
-        
-        print("✅ Registered \(microApps.count) MicroApp(s)")
+    /// Collects all SwiftData model types declared by registered MicroApps
+    /// Used by PandoraApp to build the ModelContainer schema dynamically
+    var allModelTypes: [any PersistentModel.Type] {
+        microApps.flatMap { $0.modelTypes }
     }
+    
+    // MARK: - Private Methods
     
     /// Update filtered apps based on search text
     private func updateFilteredApps() {
@@ -132,15 +135,14 @@ final class HubViewModel: HubViewModelProtocol {
 /// Factory for creating HubViewModel instances
 enum HubViewModelFactory {
     
-    /// Create a standard HubViewModel
+    /// Create a standard HubViewModel from the shared registry
+    @MainActor
     static func makeViewModel() -> HubViewModel {
-        HubViewModel()
+        HubViewModel(registry: MicroAppRegistry.shared)
     }
     
-    /// Create a HubViewModel with pre-registered apps (useful for testing)
-    static func makeViewModel(with apps: [AnyMicroApp]) -> HubViewModel {
-        let viewModel = HubViewModel()
-        apps.forEach { viewModel.registerMicroApp($0) }
-        return viewModel
+    /// Create a HubViewModel with a custom registry (useful for testing/previews)
+    static func makeViewModel(registry: MicroAppRegistryProtocol) -> HubViewModel {
+        HubViewModel(registry: registry)
     }
 }

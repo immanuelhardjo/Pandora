@@ -34,6 +34,13 @@ struct ReeeeeMicroApp: MicroAppProvider {
         description: "Yeet your phone to reeeee!"
     )
     
+    // MARK: - SwiftData Models
+    
+    /// SwiftData models this MicroApp requires for persistence
+    var modelTypes: [any PersistentModel.Type] {
+        [ReeeeeModel.self]
+    }
+    
     // MARK: - View Factory
     
     func makeView() -> some View {

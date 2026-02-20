@@ -77,9 +77,9 @@ struct DetectImpactUseCase: UseCase {
 /// Use case for saving Reeeee records
 struct SaveReeeeeRecordUseCase: UseCase {
     
-    private let repository: SwiftDataRepository<ReeeeeModel>
+    private let repository: AnyRepository<ReeeeeModel>
     
-    init(repository: SwiftDataRepository<ReeeeeModel>) {
+    init(repository: AnyRepository<ReeeeeModel>) {
         self.repository = repository
     }
     
@@ -107,9 +107,9 @@ struct SaveReeeeeRecordUseCase: UseCase {
 /// Use case for fetching all Reeeee records
 struct FetchReeeeeHistoryUseCase: UseCase {
     
-    private let repository: SwiftDataRepository<ReeeeeModel>
+    private let repository: AnyRepository<ReeeeeModel>
     
-    init(repository: SwiftDataRepository<ReeeeeModel>) {
+    init(repository: AnyRepository<ReeeeeModel>) {
         self.repository = repository
     }
     
@@ -131,9 +131,9 @@ struct FetchReeeeeHistoryUseCase: UseCase {
 /// Use case for clearing all Reeeee records
 struct ClearReeeeeHistoryUseCase: UseCase {
     
-    private let repository: SwiftDataRepository<ReeeeeModel>
+    private let repository: AnyRepository<ReeeeeModel>
     
-    init(repository: SwiftDataRepository<ReeeeeModel>) {
+    init(repository: AnyRepository<ReeeeeModel>) {
         self.repository = repository
     }
     

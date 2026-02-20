@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 // MARK: - MicroApp Error Types
 
@@ -82,6 +83,10 @@ protocol MicroAppProvider: Identifiable, Hashable where ID == String {
     /// Factory method to create the MicroApp's root view
     @ViewBuilder func makeView() -> ContentView
     
+    /// SwiftData model types this MicroApp needs persisted
+    /// Return an empty array if the MicroApp has no persistent models
+    var modelTypes: [any PersistentModel.Type] { get }
+    
     /// Optional lifecycle hook called when app is about to be presented
     func onAppear()
     
@@ -106,6 +111,9 @@ extension MicroAppProvider {
         // Default: no-op
     }
     
+    // Default: no persistent models
+    var modelTypes: [any PersistentModel.Type] { [] }
+    
     // Hashable conformance
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
@@ -123,12 +131,14 @@ extension MicroAppProvider {
 struct AnyMicroApp: MicroAppProvider {
     
     let metadata: MicroAppMetadata
+    let modelTypes: [any PersistentModel.Type]
     private let _makeView: () -> AnyView
     private let _onAppear: () -> Void
     private let _onDisappear: () -> Void
     
     init<T: MicroAppProvider>(_ microApp: T) {
         self.metadata = microApp.metadata
+        self.modelTypes = microApp.modelTypes
         self._makeView = { AnyView(microApp.makeView()) }
         self._onAppear = microApp.onAppear
         self._onDisappear = microApp.onDisappear
