@@ -45,6 +45,15 @@ struct PandoraApp: App {
         // 3. Build SwiftData schema dynamically from registered MicroApps
         let allModelTypes = hubViewModel.allModelTypes
         
+        // Ensure Application Support directory exists before CoreData tries to
+        // create default.store — prevents noisy "Failed to stat path" errors on first launch
+        let fileManager = FileManager.default
+        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            if !fileManager.fileExists(atPath: appSupportURL.path) {
+                try? fileManager.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
+            }
+        }
+        
         do {
             let schema = Schema(allModelTypes)
             let configuration = ModelConfiguration(isStoredInMemoryOnly: false)
@@ -117,6 +126,7 @@ struct PandoraApp: App {
         let registry = MicroAppRegistry.shared
         
         registry.register(ReeeeeMicroApp())
+        registry.register(WallSenseMicroApp())
         
         // Add new MicroApps here:
         // registry.register(NewFeatureMicroApp())

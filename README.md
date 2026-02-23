@@ -1,6 +1,6 @@
 # Pandora
 
-A **MicroApp Container Platform** for iOS built with **Clean Architecture**, **SwiftUI**, and **SwiftData**.
+A **MicroApp Container Platform** for iOS built with **SwiftUI** and **SwiftData**.
 
 Pandora is a modular application where self-contained feature modules (MicroApps) are discovered, registered, and launched from a central Hub. Each MicroApp owns its own Domain, Data, and Presentation layers — and can be added or removed with a single line of code.
 
